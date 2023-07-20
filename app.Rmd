@@ -1,0 +1,164 @@
+---
+title: "Shiny ML App"
+author: "Will Burke"
+date: "7/19/23"
+output: html_document
+runtime: shiny
+---
+
+```{r, include=FALSE}
+library(shiny)
+library(yarrr)
+```
+
+1. Dataset
+```{r eval=FALSE, include=FALSE}
+# Step 1: Load and clean the raw dataset
+data <- read.csv('world-data-2023.csv')
+df <- as.data.frame(data)
+# Removing individual records that have several blank values
+df <- df[-c(4,57,74,114,121,129,134,150,164,182),]
+# Only selecting a subset of columns in the dataset (for consistent data)
+df <- subset(df,select=c('Country','Density..P.Km2.','Land.Area.Km2.', 'Agricultural.Land....', 'Birth.Rate', 'Co2.Emissions', 'Fertility.Rate', 'Forested.Area....', 'Life.expectancy', 'Population', 'Urban_population'))
+#colnames(df)
+#View(df)
+write.csv(df, 'world-data-2023-clean.csv')
+```
+
+```{r}
+# Reading cleaned csv
+data <- read.csv('world-data-2023-clean-2.csv')
+df <- as.data.frame(data)
+head(df,5)
+```
+
+2.ML Algorithm for Dataset: Regression
+```{r echo=TRUE}
+# Setting up a linear regression model
+df.lm <- lm(formula = co2_emissions ~ density + land_area_m + agricultural_land + birth_rate + fertility_rate + life_expectancy + proportion_forested + population_m + urban_population_m, data=df)
+summary(df.lm)
+```
+
+3. How does regression work?
+
+```{r echo=TRUE}
+# generating a prediction
+df.new <- data.frame(density=c(60),
+                     land_area_m=c(0.652230),
+                     agricultural_land=c(0.581),
+                     birth_rate=c(32.49),
+                     fertility_rate=c(4.47),
+                     life_expectancy=c(64.5),
+                     proportion_forested=c(0.021),
+                     population_m=c(38.041754),
+                     urban_population_m=c(38.041754))
+predict(object=df.lm,
+        newdata=df.new)
+```
+4. Shiny Application
+```{r echo=FALSE}
+# Defining UI
+ui <- fluidPage(
+  # App title ----
+  titlePanel("Predicting a Country's C02 Emissions"),
+
+  # Defining layout
+  sidebarLayout(
+    # Slider options
+    sidebarPanel(
+      # Density slider input
+      sliderInput("density", "Density:",
+                  min = 0, max = 1000,
+                  value = 500),
+      # Land area input
+      sliderInput("land_area_m", "Land Area(m):",
+                  min = 0.01, max = 10,
+                  value = 2.85, step = 0.01),
+      # Agricultural land input
+      sliderInput("agricultural_land", "Agricultural land:",
+                  min = 0, max = 1,
+                  value = 0.5, step=0.01),
+      # Birth rate input
+      sliderInput("birth_rate", "Birth Rate:",
+                  min = 1, max = 50,
+                  value = 14.3, step = 0.1),
+      # Fertility rate input
+      sliderInput("fertility_rate", "Fertility Rate:",
+                  min = 1, max = 10,
+                  value = 3, step = 0.01),
+      # Life expectancy input
+      sliderInput("life_expectancy", "Life Expectancy:",
+                  min = 50, max = 95,
+                  value = 84, step = 0.1),
+      # Proportion forested input
+      sliderInput("proportion_forested", "Proportion Forested:",
+                  min = 0, max = 1,
+                  value = 0.5, step = 0.01),
+      # Population input
+      sliderInput("population_m", "Population(m):",
+                  min = 0, max = 250,
+                  value = 25, step = 0.1),
+      # Urban population input
+      sliderInput("urban_population_m", "Urban Population(m):",
+                  min = 0, max = 250,
+                  value = 10, step = 0.1)
+    ),
+
+    # Displaying outputs
+    mainPanel(
+      tableOutput("values")
+    )
+  )
+)
+
+# Defining server
+server <- function(input, output) {
+
+  # Creates dataframe containing input values
+  sliderValues <- reactive({
+    # DF to be fed into prediction model
+    df.new <- data.frame(density=c(input$density),
+                     land_area_m=c(input$land_area_m),
+                     agricultural_land=c(input$agricultural_land),
+                     birth_rate=c(input$birth_rate),
+                     fertility_rate=c(input$fertility_rate),
+                     life_expectancy=c(input$life_expectancy),
+                     proportion_forested=c(input$proportion_forested),
+                     population_m=c(input$population_m),
+                     urban_population_m=c(input$urban_population_m))
+    # DF containing row labels for table
+    data.frame(
+      Name = c("Density (persons per square km)",
+               "Land Area (square km, millions)",
+               "Agricultural Land (proportion agricultural land to total",
+               "Birth Rate (births per 1,000 per year)",
+               "Fertility Rate (avg # children per woman)",
+               "Life Expectancy (years)",
+               "Proportion Forested (proportion of forested land to total)",
+               "Population(m)",
+               "Urban Population(m)",
+               "C02 Emissions Prediction (tons)"),
+      # DfF containing numbers to be displayed
+      Value = as.character(c(input$density,
+                             input$land_area_m,
+                             input$agricultural_land,
+                             input$birth_rate,
+                             input$fertility_rate,
+                             input$life_expectancy,
+                             input$proportion_forested,
+                             input$population_m,
+                             input$urban_population_m,
+                             predict(object=df.lm, newdata=df.new)
+                             )),
+      stringsAsFactors = FALSE)
+  })
+
+  # Showing the table
+  output$values <- renderTable({
+    sliderValues()
+  })
+}
+
+# Run app
+shinyApp(ui, server)
+```
